@@ -1,0 +1,85 @@
+# ManagerOX API
+
+Laravel backend for the ManagerOX CRM, intended for **api.managerox.com**.
+Consumed by the CRM at [managerox-app](https://github.com/SaadAhmad915/managerox-app).
+
+## Running locally
+
+Needs **PHP >= 8.3** and **Composer**. On Windows the least painful route is
+[Laravel Herd](https://herd.laravel.com) — one installer, bundles both.
+
+```bash
+composer install
+cp .env.example .env        # Windows: copy .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+php artisan serve           # http://localhost:8000
+```
+
+The database is **SQLite** — a file at `database/database.sqlite`, created
+automatically. No database server to install. Swap `DB_CONNECTION` in `.env`
+for MySQL or Postgres in production.
+
+### Seeded logins
+
+All seeded users share the password `password`.
+
+| Email | Role |
+| --- | --- |
+| `ali@managerox.com` | Sales Manager |
+| `sara@managerox.com` | Sales Executive |
+| `bilal@managerox.com` | Sales Executive |
+| `ayesha@managerox.com` | Sales Executive |
+
+The seed reproduces the figures the dashboard was designed against — the funnel
+lands on 1250 / 640 / 320 / 210 / 180 and attainment on 92 / 78 / 65 / 58 % —
+but every number the API reports is derived from the rows, not hardcoded.
+
+## Endpoints
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/sanctum/csrf-cookie` | — | Call once before the first POST |
+| POST | `/api/login` | — | Sign in, throttled to 6/min |
+| POST | `/api/logout` | session | Sign out |
+| GET | `/api/me` | session | Current user |
+| GET | `/api/dashboard` | session | Everything the dashboard renders |
+| GET | `/api/leads` | session | Paginated; `?stage=`, `?search=`, `?perPage=` |
+| POST | `/api/leads` | session | Create |
+| GET | `/api/leads/{id}` | session | Read |
+| PATCH | `/api/leads/{id}` | session | Update |
+| DELETE | `/api/leads/{id}` | session | Delete |
+
+`GET /api/dashboard` returns exactly the `DashboardData` shape in the frontend's
+`app/lib/types.ts`. **Those two files are one contract** — renaming a key here is
+a breaking change there.
+
+## How auth works, and the part that trips people
+
+Sanctum **SPA cookie** mode, not bearer tokens.
+
+`app.managerox.com` and `api.managerox.com` are different *origins* (so CORS
+applies) but the same *site* (so a `SameSite=Lax` cookie on `.managerox.com` is
+still sent). Three things must line up or you get silent 401s:
+
+1. `SANCTUM_STATEFUL_DOMAINS` must list the frontend host. Sanctum decides
+   whether a request is stateful by matching its `Origin` header against this.
+   **If the origin is not listed there is no session at all** — the request is
+   treated as a token request and falls through to 401.
+2. `CORS_ALLOWED_ORIGINS` must list the frontend origin explicitly. A wildcard
+   with credentials is invalid per the CORS spec and browsers reject it, which
+   is why `config/cors.php` reads an explicit list and sets
+   `supports_credentials => true`.
+3. The frontend must send `credentials: 'include'` on every request, and call
+   `/sanctum/csrf-cookie` once before its first POST.
+
+In production set `SESSION_DOMAIN=.managerox.com` so the cookie is shared across
+the subdomains. Locally leave it `null`.
+
+## Known gaps
+
+- **Active Deals trend is approximate.** A true month-over-month figure needs
+  stage-change history, which is not recorded yet. It currently approximates by
+  lead creation date — see the note in `DashboardController`.
+- No registration, password reset, or roles/permissions yet.
+- No automated tests yet.
