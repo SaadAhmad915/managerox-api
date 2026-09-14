@@ -2,24 +2,25 @@
 
 namespace Database\Seeders;
 
+use App\Models\Contact;
+use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
 /**
- * Seeds a coherent demo dataset.
+ * Seeds a coherent demo dataset across the three objects.
  *
- * The figures are chosen so the dashboard reads like the product design —
- * the funnel lands on 1250 / 640 / 320 / 210 / 180 and team attainment on
- * 92 / 78 / 65 / 58 % — while every number the API reports is genuinely
- * derived from these rows rather than hardcoded.
+ * Figures are chosen so the dashboard reads like the product design — the deal
+ * funnel lands on 1250 / 640 / 320 / 210 / 180 and attainment on 92 / 78 / 65 /
+ * 58 % — while every number the API reports is genuinely derived from rows.
  */
 class DatabaseSeeder extends Seeder
 {
     private const TARGET = 10_000_000;
 
-    /** name, email, role, attainment % of TARGET closed this month */
+    /** name, email, role, % of TARGET won this month */
     private const TEAM = [
         ['Ali Khan', 'ali@managerox.com', 'Sales Manager', 92],
         ['Sara Ahmed', 'sara@managerox.com', 'Sales Executive', 78],
@@ -27,10 +28,9 @@ class DatabaseSeeder extends Seeder
         ['Ayesha Malik', 'ayesha@managerox.com', 'Sales Executive', 58],
     ];
 
-    /** Millions of PKR closed in each of the five months before this one. */
+    /** Millions of PKR won in each of the five months before this one. */
     private const PRIOR_MONTHS = [8, 12, 16, 20, 25];
 
-    /** Target funnel size per stage, including every lead this seeder makes. */
     private const FUNNEL = [
         'new' => 1250,
         'qualified' => 640,
@@ -39,11 +39,13 @@ class DatabaseSeeder extends Seeder
         'closed' => 180,
     ];
 
-    private const RECENT = [
-        ['Farhan Ali', 'Residential Plot – DHA Lahore', 10],
-        ['Sara Khan', 'Commercial – DHA Karachi', 60],
-        ['Ahmad Malik', 'Villa – DHA Islamabad', 180],
-        ['Nida Zahra', 'Apartment – DHA Multan', 300],
+    private const PEOPLE = [
+        ['Farhan Ali', 'Residential Plot – DHA Lahore', 'Zameen Group'],
+        ['Sara Khan', 'Commercial – DHA Karachi', 'Al-Fatah'],
+        ['Ahmad Malik', 'Villa – DHA Islamabad', 'Skyline Developers'],
+        ['Nida Zahra', 'Apartment – DHA Multan', 'Pearl Estates'],
+        ['Hassan Raza', 'Farmhouse – Bedian Road', 'Raza & Sons'],
+        ['Mariam Sheikh', 'Office Floor – Gulberg', 'Sheikh Holdings'],
     ];
 
     public function run(): void
@@ -58,51 +60,55 @@ class DatabaseSeeder extends Seeder
 
         $owner = $users->first();
 
-        // This month's closed revenue, split so each rep's attainment is exact.
+        // Named contacts, each converted from an enquiry.
+        $contacts = collect(self::PEOPLE)->map(function (array $row, int $i) use ($users) {
+            $lead = Lead::create([
+                'name' => $row[0],
+                'detail' => $row[1],
+                'status' => 'converted',
+                'converted_at' => now()->subDays($i + 1),
+                'owner_id' => $users[$i % $users->count()]->id,
+                'created_at' => now()->subDays($i + 3),
+            ]);
+
+            return Contact::create([
+                'name' => $row[0],
+                'email' => str($row[0])->lower()->replace(' ', '.').'@example.com',
+                'phone' => '+9230012345'.str_pad((string) $i, 2, '0', STR_PAD_LEFT),
+                'company' => $row[2],
+                'notes' => $row[1],
+                'owner_id' => $lead->owner_id,
+                'lead_id' => $lead->id,
+            ]);
+        });
+
+        // This month's won revenue, split so each rep's attainment is exact.
         foreach (self::TEAM as $i => $row) {
-            Lead::create([
-                'name' => "{$row[0]} — closed this month",
-                'detail' => 'Aggregate closed revenue',
+            Deal::create([
+                'title' => "{$row[0]} — won this month",
+                'contact_id' => $contacts->random()->id,
+                'owner_id' => $users[$i]->id,
                 'stage' => 'closed',
                 'value' => (int) (self::TARGET * $row[3] / 100),
-                'owner_id' => $users[$i]->id,
                 'closed_at' => now()->startOfMonth()->addDays(3),
             ]);
         }
 
-        // Earlier months, one aggregate row each, for the revenue trend.
+        // Earlier months, one aggregate deal each, for the revenue trend.
         foreach (self::PRIOR_MONTHS as $offset => $millions) {
             $month = now()->startOfMonth()->subMonths(count(self::PRIOR_MONTHS) - $offset);
-            Lead::create([
-                'name' => 'Closed — '.$month->format('F Y'),
-                'detail' => 'Aggregate closed revenue',
+            Deal::create([
+                'title' => 'Won — '.$month->format('F Y'),
+                'contact_id' => $contacts->random()->id,
+                'owner_id' => $owner->id,
                 'stage' => 'closed',
                 'value' => $millions * 1_000_000,
-                'owner_id' => $owner->id,
                 'closed_at' => $month->copy()->addDays(14),
             ]);
         }
 
-        // Named recent leads shown on the dashboard.
-        foreach (self::RECENT as $row) {
-            Lead::create([
-                'name' => $row[0],
-                'detail' => $row[1],
-                'stage' => 'new',
-                'owner_id' => $owner->id,
-                'created_at' => now()->subMinutes($row[2]),
-            ]);
-        }
-
-        // Bulk filler, reduced by the rows already created in each stage, so
-        // the funnel totals land exactly on self::FUNNEL.
-        $already = [
-            'new' => count(self::RECENT),
-            'closed' => count(self::TEAM) + count(self::PRIOR_MONTHS),
-        ];
-
-        // Spread creation across the last six months on a rising curve, so
-        // month-over-month trends read as steady growth rather than noise.
+        // Bulk deals so the funnel totals land exactly on self::FUNNEL.
+        $already = ['closed' => count(self::TEAM) + count(self::PRIOR_MONTHS)];
         $weights = [10, 12, 14, 16, 18, 20];
         $weightTotal = array_sum($weights);
 
@@ -110,33 +116,53 @@ class DatabaseSeeder extends Seeder
             $remaining = $target - ($already[$stage] ?? 0);
             $rows = [];
             $cursor = 0;
-            foreach ($weights as $monthsAgo => $weight) {
-                $share = (int) round($remaining * $weight / $weightTotal);
-                if ($monthsAgo === count($weights) - 1) {
-                    $share = $remaining - $cursor;   // last bucket takes the remainder
-                }
-                $monthStart = now()->startOfMonth()->subMonths(count($weights) - 1 - $monthsAgo);
+
+            foreach ($weights as $index => $weight) {
+                $share = $index === count($weights) - 1
+                    ? $remaining - $cursor
+                    : (int) round($remaining * $weight / $weightTotal);
+
+                $monthStart = now()->startOfMonth()->subMonths(count($weights) - 1 - $index);
+
                 for ($i = 1; $i <= $share; $i++) {
-                    $createdAt = $monthStart->copy()->addDays(random_int(0, max(0, $monthStart->daysInMonth - 1)));
+                    $createdAt = $monthStart->copy()
+                        ->addDays(random_int(0, max(0, $monthStart->daysInMonth - 1)));
                     if ($createdAt->isFuture()) {
                         $createdAt = now()->subHours(random_int(1, 48));
                     }
                     $cursor++;
                     $rows[] = [
-                        'name' => ucfirst($stage)." Lead {$cursor}",
-                        'detail' => 'Residential Plot – DHA Lahore',
+                        'title' => Deal::STAGES[$stage]." opportunity {$cursor}",
+                        'contact_id' => $contacts->random()->id,
+                        'owner_id' => $users->random()->id,
                         'stage' => $stage,
                         'value' => 0,
-                        'owner_id' => $users->random()->id,
                         'closed_at' => $stage === 'closed' ? $createdAt->copy()->addDays(2) : null,
                         'created_at' => $createdAt,
                         'updated_at' => $createdAt,
                     ];
                 }
             }
+
             foreach (array_chunk($rows, 500) as $chunk) {
-                Lead::insert($chunk);
+                Deal::insert($chunk);
             }
+        }
+
+        // Open enquiries still waiting to be worked.
+        foreach ([
+            ['Usman Tariq', 'Plot enquiry – Bahria Town', 'new', 12],
+            ['Zainab Nasir', 'Shop – Emporium Mall', 'contacted', 90],
+            ['Kashif Iqbal', '10 Marla – Askari 11', 'qualified', 260],
+            ['Rabia Anwar', 'Studio – Gulberg Greens', 'new', 420],
+        ] as $row) {
+            Lead::create([
+                'name' => $row[0],
+                'detail' => $row[1],
+                'status' => $row[2],
+                'owner_id' => $users->random()->id,
+                'created_at' => now()->subMinutes($row[3]),
+            ]);
         }
 
         foreach ([
@@ -144,8 +170,14 @@ class DatabaseSeeder extends Seeder
             ['Send proposal to Zameen Group', now()->setTime(14, 0)],
             ['Call new lead from website', now()->addDay()->setTime(10, 0)],
             ['Prepare weekly sales report', now()->addDay()->setTime(16, 0)],
-        ] as $row) {
-            Task::create(['title' => $row[0], 'due_at' => $row[1], 'user_id' => $owner->id]);
+            ['Site visit with Mariam Sheikh', now()->addDays(2)->setTime(12, 30)],
+        ] as $i => $row) {
+            Task::create([
+                'title' => $row[0],
+                'due_at' => $row[1],
+                'user_id' => $owner->id,
+                'contact_id' => $contacts[$i % $contacts->count()]->id,
+            ]);
         }
     }
 }

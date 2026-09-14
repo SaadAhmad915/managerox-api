@@ -170,7 +170,8 @@ class MetaWebhookTest extends TestCase
         $this->assertSame('Hina Raza', $lead->name);
         $this->assertSame('hina@example.com', $lead->email);
         $this->assertSame('+923001234567', $lead->phone);
-        $this->assertSame('new', $lead->stage);
+        // Leads carry a status now; the stage lives on the deal they convert into.
+        $this->assertSame('new', $lead->status);
         $this->assertSame('meta', $lead->source);
         $this->assertSame('Which Property Type: Villa', $lead->detail);
         // Unmapped custom answers must survive verbatim.

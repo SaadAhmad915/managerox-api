@@ -54,17 +54,37 @@ but every number the API reports is derived from the rows, not hardcoded.
 | POST | `/api/logout` | session | Sign out |
 | GET | `/api/me` | session | Current user |
 | GET | `/api/dashboard` | session | Everything the dashboard renders |
-| GET | `/api/leads` | session | Paginated; `?stage=`, `?search=`, `?perPage=` |
-| POST | `/api/leads` | session | Create |
-| GET | `/api/leads/{id}` | session | Read |
-| PATCH | `/api/leads/{id}` | session | Update |
-| DELETE | `/api/leads/{id}` | session | Delete |
+| GET | `/api/leads` | session | `?status=`, `?search=`, `?source=`, `?openOnly=` |
+| POST·GET·PATCH·DELETE | `/api/leads[/{id}]` | session | Lead CRUD |
+| POST | `/api/leads/{id}/convert` | session | Enquiry → Contact + Deal |
+| GET·POST·PATCH·DELETE | `/api/contacts[/{id}]` | session | Contact CRUD; `?search=` |
+| GET·POST·PATCH·DELETE | `/api/deals[/{id}]` | session | Deal CRUD; `?stage=`, `?includeLost=` |
+| GET·POST·PATCH·DELETE | `/api/tasks[/{id}]` | session | Task CRUD; `?filter=open\|today\|overdue\|done` |
 | GET | `/api/webhooks/meta/leads` | signature | Meta subscription handshake |
 | POST | `/api/webhooks/meta/leads` | signature | Meta Instant Form lead received |
 
 `GET /api/dashboard` returns exactly the `DashboardData` shape in the frontend's
 `app/lib/types.ts`. **Those two files are one contract** — renaming a key here is
 a breaking change there.
+
+## The data model
+
+```
+Lead ──convert──► Contact ──has many──► Deal
+(enquiry)         (person)              (opportunity: stage + value)
+```
+
+A lead used to carry the stage and the value itself, which fused two different
+lifetimes: a person outlives any one deal, and may hold several. Converting a
+lead creates the contact and the first deal, then marks the lead converted —
+**once**. A second attempt is refused rather than silently duplicating both.
+
+The dashboard's funnel, revenue and team attainment all derive from **deals**;
+"Total Leads" counts enquiries and "Customers" counts contacts.
+
+A deal's `closed_at` and `lost_at` are kept consistent with its stage by the
+controller, because a stage and a timestamp that disagree make the pipeline and
+the revenue report contradict each other with no way to tell which is right.
 
 ## How auth works, and the part that trips people
 

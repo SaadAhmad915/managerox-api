@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Contact;
+use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\Task;
 use App\Models\User;
@@ -43,38 +45,41 @@ class DashboardController extends Controller
     /** @return array<int, array<string, mixed>> */
     private function stats(Carbon $monthStart, Carbon $prevStart): array
     {
-        $createdBetween = fn (Carbon $from, ?Carbon $to) => Lead::where('created_at', '>=', $from)
-            ->when($to, fn ($q) => $q->where('created_at', '<', $to))->count();
+        $between = fn (string $model, string $column, Carbon $from, ?Carbon $to) => $model::query()
+            ->where($column, '>=', $from)
+            ->when($to, fn ($q) => $q->where($column, '<', $to))
+            ->count();
 
-        $closedValue = fn (Carbon $from, ?Carbon $to) => (int) Lead::where('stage', 'closed')
+        $wonValue = fn (Carbon $from, ?Carbon $to) => (int) Deal::won()
             ->where('closed_at', '>=', $from)
             ->when($to, fn ($q) => $q->where('closed_at', '<', $to))
             ->sum('value');
 
-        $closedCount = fn (Carbon $from, ?Carbon $to) => Lead::where('stage', 'closed')
-            ->where('closed_at', '>=', $from)
-            ->when($to, fn ($q) => $q->where('closed_at', '<', $to))->count();
-
-        $totalLeads = Lead::count();
-        $activeDeals = Lead::whereIn('stage', Lead::ACTIVE_STAGES)->count();
-        $customers = Lead::where('stage', 'closed')->count();
-        $revenue = $closedValue($monthStart, null);
+        $openDeals = Deal::active()->whereIn('stage', Deal::OPEN_STAGES)->count();
+        $revenue = $wonValue($monthStart, null);
 
         return [
-            $this->stat('leads', 'Total Leads', $totalLeads, $createdBetween($monthStart, null), $createdBetween($prevStart, $monthStart)),
-            // NOTE: a true month-over-month figure for open deals needs stage
-            // history, which we do not record yet. Until a stage_changes table
-            // exists this approximates it by when the lead was created.
             $this->stat(
-                'deals',
-                'Active Deals',
-                $activeDeals,
-                Lead::whereIn('stage', Lead::ACTIVE_STAGES)->where('created_at', '>=', $monthStart)->count(),
-                Lead::whereIn('stage', Lead::ACTIVE_STAGES)
+                'leads', 'Total Leads', Lead::count(),
+                $between(Lead::class, 'created_at', $monthStart, null),
+                $between(Lead::class, 'created_at', $prevStart, $monthStart),
+            ),
+            $this->stat(
+                'deals', 'Active Deals', $openDeals,
+                Deal::active()->whereIn('stage', Deal::OPEN_STAGES)
+                    ->where('created_at', '>=', $monthStart)->count(),
+                Deal::active()->whereIn('stage', Deal::OPEN_STAGES)
                     ->whereBetween('created_at', [$prevStart, $monthStart])->count(),
             ),
-            $this->stat('customers', 'Customers', $customers, $closedCount($monthStart, null), $closedCount($prevStart, $monthStart)),
-            $this->stat('revenue', 'Revenue (PKR)', $revenue, $revenue, $closedValue($prevStart, $monthStart), compact: true),
+            $this->stat(
+                'customers', 'Customers', Contact::count(),
+                $between(Contact::class, 'created_at', $monthStart, null),
+                $between(Contact::class, 'created_at', $prevStart, $monthStart),
+            ),
+            $this->stat(
+                'revenue', 'Revenue (PKR)', $revenue,
+                $revenue, $wonValue($prevStart, $monthStart), compact: true,
+            ),
         ];
     }
 
@@ -96,10 +101,10 @@ class DashboardController extends Controller
     /** @return array<int, array<string, mixed>> */
     private function pipeline(): array
     {
-        $counts = Lead::query()->selectRaw('stage, count(*) as aggregate')
+        $counts = Deal::active()->selectRaw('stage, count(*) as aggregate')
             ->groupBy('stage')->pluck('aggregate', 'stage');
 
-        return collect(Lead::STAGES)
+        return collect(Deal::STAGES)
             ->map(fn (string $label, string $stage) => [
                 'id' => $stage,
                 'label' => $label,
@@ -115,14 +120,14 @@ class DashboardController extends Controller
             $start = $monthStart->copy()->subMonths($i);
             $points[] = [
                 'month' => $start->format('M'),
-                'value' => (int) Lead::where('stage', 'closed')
+                'value' => (int) Deal::won()
                     ->whereBetween('closed_at', [$start, $start->copy()->endOfMonth()])
                     ->sum('value'),
             ];
         }
 
-        $total = (int) Lead::where('stage', 'closed')->where('closed_at', '>=', $monthStart)->sum('value');
-        $previous = (int) Lead::where('stage', 'closed')
+        $total = (int) Deal::won()->where('closed_at', '>=', $monthStart)->sum('value');
+        $previous = (int) Deal::won()
             ->whereBetween('closed_at', [$prevStart, $monthStart])->sum('value');
 
         return [
@@ -164,7 +169,8 @@ class DashboardController extends Controller
     /** @return array<int, array<string, mixed>> */
     private function recentLeads(): array
     {
-        return Lead::where('stage', 'new')->latest('created_at')->limit(4)->get()
+        return Lead::whereIn('status', Lead::OPEN_STATUSES)
+            ->latest('created_at')->limit(4)->get()
             ->map(fn (Lead $lead) => [
                 'id' => (string) $lead->id,
                 'name' => $lead->name,
@@ -178,7 +184,7 @@ class DashboardController extends Controller
     private function team(Carbon $monthStart): array
     {
         return User::orderBy('id')->get()->map(function (User $user) use ($monthStart) {
-            $closed = (int) $user->leads()->where('stage', 'closed')
+            $closed = (int) Deal::won()->where('owner_id', $user->id)
                 ->where('closed_at', '>=', $monthStart)->sum('value');
 
             return [

@@ -72,7 +72,7 @@ class MetaLeadService
                 'email' => $this->pick($answers, self::EMAIL_KEYS),
                 'phone' => $this->pick($answers, self::PHONE_KEYS),
                 'detail' => $this->describe($answers),
-                'stage' => 'new',
+                'status' => 'new',
                 'source' => 'meta',
                 'form_id' => $meta['form_id'] ?? $formId,
                 'page_id' => $pageId,

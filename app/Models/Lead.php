@@ -6,36 +6,37 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * An enquiry. Once qualified it is converted exactly once, producing a Contact
+ * (the person) and a Deal (the opportunity). The lead is kept afterwards as the
+ * record of where that business came from.
+ */
 #[Fillable([
-    'name', 'email', 'phone', 'detail', 'stage', 'value', 'owner_id', 'closed_at',
+    'name', 'email', 'phone', 'detail', 'status', 'owner_id', 'converted_at',
     'source', 'external_id', 'form_id', 'page_id', 'payload',
 ])]
 class Lead extends Model
 {
     use HasFactory;
 
-    /**
-     * Pipeline stages, in order. The order is meaningful: it drives the funnel
-     * on the dashboard, so keep it sorted from earliest to latest.
-     */
-    public const STAGES = [
-        'new' => 'New Leads',
+    public const STATUSES = [
+        'new' => 'New',
+        'contacted' => 'Contacted',
         'qualified' => 'Qualified',
-        'proposal' => 'Proposal',
-        'negotiation' => 'Negotiation',
-        'closed' => 'Closed',
+        'unqualified' => 'Unqualified',
+        'converted' => 'Converted',
     ];
 
-    /** Stages that count as an open deal being actively worked. */
-    public const ACTIVE_STAGES = ['qualified', 'proposal', 'negotiation'];
+    /** Statuses where the lead still needs working. */
+    public const OPEN_STATUSES = ['new', 'contacted', 'qualified'];
 
     protected function casts(): array
     {
         return [
-            'value' => 'integer',
-            'closed_at' => 'datetime',
             'payload' => 'array',
+            'converted_at' => 'datetime',
         ];
     }
 
@@ -43,6 +44,23 @@ class Lead extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    /** @return HasOne<Contact, $this> */
+    public function contact(): HasOne
+    {
+        return $this->hasOne(Contact::class);
+    }
+
+    /** @return HasOne<Deal, $this> */
+    public function deal(): HasOne
+    {
+        return $this->hasOne(Deal::class);
+    }
+
+    public function isConverted(): bool
+    {
+        return $this->converted_at !== null;
     }
 
     public function initials(): string
