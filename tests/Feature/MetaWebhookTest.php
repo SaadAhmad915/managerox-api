@@ -21,6 +21,12 @@ class MetaWebhookTest extends TestCase
         config()->set('services.meta.app_secret', 'test-app-secret');
         config()->set('services.meta.verify_token', 'test-verify-token');
         config()->set('services.meta.page_token', 'test-page-token');
+        // Pin the Graph host so these tests do not depend on whatever
+        // META_GRAPH_URL happens to be set to in the developer's .env.
+        config()->set('services.meta.graph_url', 'https://graph.facebook.com');
+
+        // Any unmatched outbound call is a bug in the test, not a silent pass.
+        Http::preventStrayRequests();
     }
 
     /** @return array{0: string, 1: string} raw body and its Meta signature */
