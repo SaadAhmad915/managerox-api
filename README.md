@@ -104,6 +104,14 @@ php artisan meta:simulate-lead
 Remember `php artisan queue:work` — real webhooks queue their Graph call, so
 without a worker nothing imports.
 
+## Deploying
+
+Without a shared parent domain the CRM and API are cross-site, so the session
+cookie is dropped and everything 401s. The CRM proxies this API instead, keeping
+the cookie first-party — see **[docs/deploying-free.md](docs/deploying-free.md)**
+for the full setup on free tiers, including running Meta imports without a queue
+worker.
+
 ## Known gaps
 
 - **Active Deals trend is approximate.** A true month-over-month figure needs

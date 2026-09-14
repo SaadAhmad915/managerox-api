@@ -17,6 +17,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // The api group is stateless by default, so requests from the hosts in
         // SANCTUM_STATEFUL_DOMAINS would otherwise have no session store.
         $middleware->statefulApi();
+
+        /*
+         * The API sits behind a proxy in production (the CRM forwards /api/*
+         * to it, and the host itself terminates TLS). Without trusting the
+         * X-Forwarded-* headers Laravel believes every request is plain HTTP
+         * on the wrong host, so it refuses to mark the session cookie Secure
+         * and generates wrong absolute URLs.
+         */
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
