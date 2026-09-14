@@ -62,6 +62,18 @@ class MetaWebhookTest extends TestCase
             ->assertSee('abc123');
     }
 
+    /**
+     * Meta sends hub.mode / hub.verify_token / hub.challenge with DOTS. PHP
+     * rewrites dots to underscores in query keys, which is the only reason
+     * reading hub_mode works — so assert the real format, not our convenient one.
+     */
+    public function test_it_handles_metas_dotted_query_parameters(): void
+    {
+        $this->get('/api/webhooks/meta/leads?hub.mode=subscribe&hub.verify_token=test-verify-token&hub.challenge=xyz789')
+            ->assertOk()
+            ->assertSee('xyz789');
+    }
+
     public function test_it_refuses_the_handshake_when_the_verify_token_is_wrong(): void
     {
         $this->get('/api/webhooks/meta/leads?hub_mode=subscribe&hub_verify_token=wrong&hub_challenge=abc123')
