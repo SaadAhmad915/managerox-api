@@ -14,6 +14,23 @@ return [
     |
     */
 
+    /*
+     * Meta (Facebook/Instagram) Lead Ads.
+     *
+     * app_secret verifies the X-Hub-Signature-256 header on incoming webhooks;
+     * without it anyone who learns the URL could post fake leads.
+     * verify_token is the shared string Meta echoes back when you first
+     * subscribe the webhook.
+     * page_token is the long-lived Page access token used to read the lead
+     * itself from the Graph API — the webhook only carries an id.
+     */
+    'meta' => [
+        'app_secret' => env('META_APP_SECRET'),
+        'verify_token' => env('META_VERIFY_TOKEN'),
+        'page_token' => env('META_PAGE_TOKEN'),
+        'graph_version' => env('META_GRAPH_VERSION', 'v21.0'),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],

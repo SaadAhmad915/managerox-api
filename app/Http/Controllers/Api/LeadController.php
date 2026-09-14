@@ -14,6 +14,7 @@ class LeadController extends Controller
     {
         $leads = Lead::query()
             ->when($request->string('stage')->toString(), fn ($q, $stage) => $q->where('stage', $stage))
+            ->when($request->string('source')->toString(), fn ($q, $source) => $q->where('source', $source))
             ->when($request->string('search')->toString(), fn ($q, $term) => $q->where(
                 fn ($q) => $q->where('name', 'like', "%{$term}%")->orWhere('detail', 'like', "%{$term}%")
             ))
@@ -86,6 +87,7 @@ class LeadController extends Controller
             'detail' => $lead->detail ?? '',
             'stage' => $lead->stage,
             'stageLabel' => Lead::STAGES[$lead->stage] ?? $lead->stage,
+            'source' => $lead->source,
             'value' => $lead->value,
             'owner' => $lead->owner?->only('id', 'name'),
             'receivedLabel' => $lead->created_at->diffForHumans(short: true),

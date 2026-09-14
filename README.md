@@ -59,6 +59,8 @@ but every number the API reports is derived from the rows, not hardcoded.
 | GET | `/api/leads/{id}` | session | Read |
 | PATCH | `/api/leads/{id}` | session | Update |
 | DELETE | `/api/leads/{id}` | session | Delete |
+| GET | `/api/webhooks/meta/leads` | signature | Meta subscription handshake |
+| POST | `/api/webhooks/meta/leads` | signature | Meta Instant Form lead received |
 
 `GET /api/dashboard` returns exactly the `DashboardData` shape in the frontend's
 `app/lib/types.ts`. **Those two files are one contract** — renaming a key here is
@@ -86,10 +88,27 @@ still sent). Three things must line up or you get silent 401s:
 In production set `SESSION_DOMAIN=.managerox.com` so the cookie is shared across
 the subdomains. Locally leave it `null`.
 
+## Meta Lead Ads
+
+Instant Form leads arrive automatically: Meta posts a signed webhook, the lead
+is read from the Graph API on the queue, and it lands in the CRM with
+`source = meta`, deduped on Meta's `leadgen_id`.
+
+Setup, field mapping and security are in **[docs/meta-lead-ads.md](docs/meta-lead-ads.md)**.
+Try it without a Meta app at all:
+
+```bash
+php artisan meta:simulate-lead
+```
+
+Remember `php artisan queue:work` — real webhooks queue their Graph call, so
+without a worker nothing imports.
+
 ## Known gaps
 
 - **Active Deals trend is approximate.** A true month-over-month figure needs
   stage-change history, which is not recorded yet. It currently approximates by
   lead creation date — see the note in `DashboardController`.
 - No registration, password reset, or roles/permissions yet.
-- No automated tests yet.
+- Meta integration has tests; the rest of the API does not yet.
+- `leads_retrieval` needs Meta App Review before it works for non-developers.

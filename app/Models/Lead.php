@@ -7,7 +7,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['name', 'email', 'phone', 'detail', 'stage', 'value', 'owner_id', 'closed_at'])]
+#[Fillable([
+    'name', 'email', 'phone', 'detail', 'stage', 'value', 'owner_id', 'closed_at',
+    'source', 'external_id', 'form_id', 'page_id', 'payload',
+])]
 class Lead extends Model
 {
     use HasFactory;
@@ -32,6 +35,7 @@ class Lead extends Model
         return [
             'value' => 'integer',
             'closed_at' => 'datetime',
+            'payload' => 'array',
         ];
     }
 
