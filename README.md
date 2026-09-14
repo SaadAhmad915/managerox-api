@@ -9,16 +9,26 @@ Needs **PHP >= 8.3** and **Composer**. On Windows the least painful route is
 [Laravel Herd](https://herd.laravel.com) — one installer, bundles both.
 
 ```bash
-composer install
-cp .env.example .env        # Windows: copy .env.example .env
-php artisan key:generate
-php artisan migrate --seed
-php artisan serve           # http://localhost:8000
+composer setup     # installs, writes .env, creates the SQLite file, migrates, seeds
+php artisan serve  # http://localhost:8000
 ```
 
-The database is **SQLite** — a file at `database/database.sqlite`, created
-automatically. No database server to install. Swap `DB_CONNECTION` in `.env`
+`composer setup` is idempotent — safe to re-run.
+
+The database is **SQLite**, a single file at `database/database.sqlite`. It is
+gitignored (you should never commit a database), so a fresh clone has no such
+file and `php artisan migrate` fails with *"Database file ... does not exist"* —
+which is why `composer setup` creates it first. Swap `DB_CONNECTION` in `.env`
 for MySQL or Postgres in production.
+
+### Serve it on localhost, not a Herd `.test` domain
+
+Use `php artisan serve`. If you park this project in Herd's directory it is
+served at `managerox-api.test`, and cookie auth against a frontend on
+`localhost:3000` **will silently fail**: `.test` and `localhost` are different
+sites, so the `SameSite=Lax` session cookie is never sent. `localhost:8000` and
+`localhost:3000` differ only by port, which keeps them same-site and makes the
+cookie work. Herd is still doing the work here — it supplies PHP and Composer.
 
 ### Seeded logins
 
