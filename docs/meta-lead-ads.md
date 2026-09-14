@@ -107,6 +107,36 @@ To test the real webhook locally, Meta needs a public URL. Expose
 `http://localhost:8000` with ngrok or `expose`, and use that host in the webhook
 config.
 
+### Exercising the entire path with no Meta app
+
+`meta:simulate-lead` skips the webhook and the Graph call. To prove the real
+chain — signed webhook, queue, Graph fetch, lead — point `META_GRAPH_URL` at a
+stub that answers like Graph:
+
+```dotenv
+META_APP_SECRET=local-test-secret
+META_VERIFY_TOKEN=local-test-token
+META_PAGE_TOKEN=stub-page-token
+META_GRAPH_URL=http://localhost:8099
+```
+
+Then post a webhook signed the way Meta signs it:
+
+```bash
+BODY='{"object":"page","entry":[{"changes":[{"field":"leadgen","value":{"leadgen_id":"1100001","page_id":"page-777","form_id":"form-777"}}]}]}'
+SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac 'local-test-secret' | awk '{print $2}')"
+
+curl -X POST http://localhost:8000/api/webhooks/meta/leads \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: $SIG" \
+  -d "$BODY"
+```
+
+Expect `{"received":true}`, then run `php artisan queue:work --stop-when-empty`
+and the lead appears with `source = meta`. Changing one byte of the body without
+re-signing must return 401 — worth confirming, since that check is the only
+thing standing between the endpoint and forged leads.
+
 ## Field mapping
 
 Instant Forms let advertisers write their own questions, so names are only

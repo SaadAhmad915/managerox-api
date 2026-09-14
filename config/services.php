@@ -29,6 +29,9 @@ return [
         'verify_token' => env('META_VERIFY_TOKEN'),
         'page_token' => env('META_PAGE_TOKEN'),
         'graph_version' => env('META_GRAPH_VERSION', 'v21.0'),
+        // Overridable so the integration can be exercised end to end against a
+        // local stub, and so a regional Graph host can be used if ever needed.
+        'graph_url' => rtrim(env('META_GRAPH_URL', 'https://graph.facebook.com'), '/'),
     ],
 
     'postmark' => [

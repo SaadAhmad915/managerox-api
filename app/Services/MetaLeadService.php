@@ -34,10 +34,11 @@ class MetaLeadService
         }
 
         $version = config('services.meta.graph_version');
+        $base = config('services.meta.graph_url');
 
         $response = Http::retry(3, 200, throw: false)
             ->timeout(15)
-            ->get("https://graph.facebook.com/{$version}/{$leadgenId}", [
+            ->get("{$base}/{$version}/{$leadgenId}", [
                 'access_token' => $token,
                 'fields' => 'id,created_time,form_id,field_data',
             ]);
