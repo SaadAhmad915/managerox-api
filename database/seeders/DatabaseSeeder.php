@@ -136,7 +136,12 @@ class DatabaseSeeder extends Seeder
                         'contact_id' => $contacts->random()->id,
                         'owner_id' => $users->random()->id,
                         'stage' => $stage,
-                        'value' => 0,
+                        // Open deals carry a value so the pipeline total is
+                        // meaningful; closed ones stay at zero so the revenue
+                        // figures come only from the aggregates above.
+                        'value' => $stage === 'closed'
+                            ? 0
+                            : random_int(2, 40) * 250_000,
                         'closed_at' => $stage === 'closed' ? $createdAt->copy()->addDays(2) : null,
                         'created_at' => $createdAt,
                         'updated_at' => $createdAt,
